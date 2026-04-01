@@ -11,8 +11,8 @@ android {
  
     defaultConfig {
         applicationId "com.zebra.rfidscanner"
-        minSdk 26
-        targetSdk 34
+        minSdk 25          // Android 7.1 — compatible con TC21 Android 11
+        targetSdk 30       // Android 11 — target específico para TC21
         versionCode 1
         versionName "1.0.0"
     }
@@ -72,3 +72,4 @@ dependencies {
 }
  
 kapt { correctErrorTypes true }
+ 
