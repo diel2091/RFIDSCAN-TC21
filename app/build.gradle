@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace 'com.zebra.rfidscanner'
-    compileSdk 31   // Android 11 compatible (API 30). Compilar con 31 es correcto.
+    compileSdk 34   // compileSdk 34 requerido por AndroidX — targetSdk 30 sigue apuntando a Android 11
 
     defaultConfig {
         applicationId "com.zebra.rfidscanner"
