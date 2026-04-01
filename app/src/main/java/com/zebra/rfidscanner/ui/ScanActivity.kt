@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -44,12 +45,9 @@ class ScanActivity : AppCompatActivity() {
     private var pendingCsvContent: String = ""
     private var pendingCsvName: String = ""
  
-    // FIX PROBLEMA 2: Receptor para saber cuando la pantalla se enciende/apaga
-    // Cuando la pantalla se enciende, DataWedge necesita que la Activity tome foco
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_SCREEN_ON) {
-                // Re-registrar DataWedge cuando la pantalla vuelve
                 Handler(Looper.getMainLooper()).postDelayed({
                     binding.rvTags.requestFocus()
                     notifyDataWedge()
@@ -89,30 +87,22 @@ class ScanActivity : AppCompatActivity() {
         setupSearch()
         observeState()
         checkPermissionsAndInit()
- 
-        // Registrar receptor de pantalla
         registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_ON))
     }
  
     override fun onResume() {
         super.onResume()
-        // FIX PROBLEMA 2: Notificar a DataWedge cada vez que la Activity vuelve al frente
-        // Esto resuelve el retraso de 3-5 min al abrir la app
-        Handler(Looper.getMainLooper()).postDelayed({
-            notifyDataWedge()
-        }, 500)
+        Handler(Looper.getMainLooper()).postDelayed({ notifyDataWedge() }, 500)
     }
  
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
-            // La Activity tiene foco — activar DataWedge
             notifyDataWedge()
             binding.rvTags.requestFocus()
         }
     }
  
-    // Envía un Intent a DataWedge para activar el perfil de esta app
     private fun notifyDataWedge() {
         try {
             val dwIntent = Intent()
@@ -201,9 +191,6 @@ class ScanActivity : AppCompatActivity() {
         }
     }
  
-    // FIX REINICIO para Enterprise Home Screen (EHS)
-    // EHS no permite killProcess — en su lugar se usa recreate() para reiniciar la Activity
-    // y se reconecta el lector RFID limpiamente
     private fun restartApp() {
         viewModel.release()
         Handler(Looper.getMainLooper()).postDelayed({
@@ -244,16 +231,12 @@ class ScanActivity : AppCompatActivity() {
  
     private fun exportToNetwork() {
         val config = SmbExporter.loadConfig(this)
-        if (config == null) {
-            showSmbConfigDialog { exportToNetworkWithConfig() }
-        } else {
-            exportToNetworkWithConfig()
-        }
+        if (config == null) showSmbConfigDialog { exportToNetworkWithConfig() }
+        else exportToNetworkWithConfig()
     }
  
     private fun exportToNetworkWithConfig() {
         val config = SmbExporter.loadConfig(this) ?: return
- 
         val progress = AlertDialog.Builder(this)
             .setMessage("Subiendo a carpeta de red...")
             .setCancelable(false)
@@ -287,7 +270,6 @@ class ScanActivity : AppCompatActivity() {
  
     private fun showSmbConfigDialog(onSaved: () -> Unit) {
         val current = SmbExporter.loadConfig(this)
- 
         val layout = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(48, 24, 48, 8)
@@ -313,14 +295,13 @@ class ScanActivity : AppCompatActivity() {
             .setTitle("Configurar carpeta de red")
             .setView(layout)
             .setPositiveButton("Guardar") { _, _ ->
-                val config = SmbExporter.SmbConfig(
+                SmbExporter.saveConfig(this, SmbExporter.SmbConfig(
                     host     = etHost.text.toString().trim(),
                     share    = etShare.text.toString().trim(),
                     domain   = etDomain.text.toString().trim(),
                     user     = etUser.text.toString().trim(),
                     password = etPass.text.toString()
-                )
-                SmbExporter.saveConfig(this, config)
+                ))
                 onSaved()
             }
             .setNegativeButton("Cancelar", null)
@@ -355,17 +336,12 @@ class ScanActivity : AppCompatActivity() {
                 binding.tvRate.text = "Rate: ${"%.1f".format(it)}/s"
             }
         }
-        lifecycleScope.launch {
-            viewModel.tags.collect { refreshList() }
-        }
-        lifecycleScope.launch {
-            viewModel.eanResults.collect { if (eanMode) refreshList() }
-        }
+        lifecycleScope.launch { viewModel.tags.collect { refreshList() } }
+        lifecycleScope.launch { viewModel.eanResults.collect { if (eanMode) refreshList() } }
     }
  
     private fun refreshList() {
         val query = searchQuery.uppercase()
- 
         val rows = if (eanMode) {
             viewModel.eanResults.value
                 .filter { r ->
@@ -374,29 +350,34 @@ class ScanActivity : AppCompatActivity() {
                     r.ean13.contains(query, ignoreCase = true) ||
                     r.gtin14.contains(query, ignoreCase = true)
                 }
-                .take(300)
-                .map { EpcAdapter.Row.EanRow(it, 1) }
+                .take(300).map { EpcAdapter.Row.EanRow(it, 1) }
         } else {
             viewModel.tags.value
-                .filter { t ->
-                    query.isEmpty() || t.epc.contains(query, ignoreCase = true)
-                }
-                .take(300)
-                .map { EpcAdapter.Row.EpcRow(it.epc, it.readCount) }
+                .filter { t -> query.isEmpty() || t.epc.contains(query, ignoreCase = true) }
+                .take(300).map { EpcAdapter.Row.EpcRow(it.epc, it.readCount) }
         }
- 
         adapter.submitList(rows)
         binding.tvSearchCount.text = if (query.isNotEmpty()) "${rows.size}" else ""
     }
  
+    // FIX TC21 Android 11: permisos Bluetooth según versión de Android
     private fun checkPermissionsAndInit() {
-        val needed = listOf(
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ).filter {
+        val needed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Android 12+ — permisos modernos
+            listOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        } else {
+            // Android 11 y menor — permisos legacy
+            listOf(
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        }.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
+ 
         if (needed.isEmpty()) viewModel.initialize()
         else permissionLauncher.launch(needed.toTypedArray())
     }
