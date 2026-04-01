@@ -1,24 +1,58 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
- 
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         BLUETOOTH
+         Android 11 (API 30) = TC21: solo BLUETOOTH + BLUETOOTH_ADMIN + LOCATION
+         Android 12+ (API 31+) = TC22: BLUETOOTH_SCAN + BLUETOOTH_CONNECT
+         Los permisos nuevos (SCAN/CONNECT) se declaran con tools:targetApi="31"
+         para que no rompan el manifest en Android 11.
+    ════════════════════════════════════════════════════════════════════════ -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
-        android:usesPermissionFlags="neverForLocation" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- Requerido en Android 11 para descubrir dispositivos BT (RFD4030) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+
+    <!-- Solo se activan en Android 12+; en TC21/Android 11 son ignorados -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="31" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_CONNECT"
+        tools:targetApi="31" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         ALMACENAMIENTO
+         En Android 11 (API 30) WRITE_EXTERNAL_STORAGE ya no funciona para apps.
+         Se usa MediaStore o SAF (Storage Access Framework) — el saveLauncher
+         de ScanActivity ya usa SAF correctamente con CreateDocument.
+    ════════════════════════════════════════════════════════════════════════ -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
- 
-    <!-- Permisos de red para exportar a carpeta SMB -->
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         RED — Para exportar a carpeta SMB / Windows
+    ════════════════════════════════════════════════════════════════════════ -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
- 
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         HARDWARE — Declarar que la app usa BT (no requerido en Play Store
+         pero sí recomendado para dispositivos enterprise)
+    ════════════════════════════════════════════════════════════════════════ -->
+    <uses-feature
+        android:name="android.hardware.bluetooth"
+        android:required="true" />
+
     <application
         android:name=".RfidApp"
         android:allowBackup="false"
@@ -28,7 +62,7 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:usesCleartextTraffic="true">
- 
+
         <activity
             android:name=".ui.ScanActivity"
             android:exported="true"
@@ -39,8 +73,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
- 
+
     </application>
- 
+
 </manifest>
- 

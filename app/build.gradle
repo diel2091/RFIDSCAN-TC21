@@ -4,19 +4,19 @@ plugins {
     id 'kotlin-kapt'
     id 'com.google.dagger.hilt.android'
 }
- 
+
 android {
     namespace 'com.zebra.rfidscanner'
-    compileSdk 34
- 
+    compileSdk 31   // Android 11 compatible (API 30). Compilar con 31 es correcto.
+
     defaultConfig {
         applicationId "com.zebra.rfidscanner"
-        minSdk 26
-        targetSdk 34
+        minSdk 26           // TC21 tiene Android 11 (API 30). Minimo 26 por el AAR de Zebra.
+        targetSdk 30        // TARGET = Android 11 para TC21
         versionCode 1
         versionName "1.0.0"
     }
- 
+
     buildTypes {
         release {
             minifyEnabled false
@@ -24,16 +24,17 @@ android {
         }
         debug { debuggable true }
     }
- 
+
     buildFeatures { viewBinding true }
- 
+
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        // TC21 con Android 11 no soporta bien JVM 17 — usar 11
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
- 
-    kotlinOptions { jvmTarget = '17' }
- 
+
+    kotlinOptions { jvmTarget = '11' }
+
     packagingOptions {
         resources {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
@@ -43,15 +44,32 @@ android {
             excludes += '/META-INF/NOTICE'
             excludes += '/META-INF/NOTICE.txt'
         }
+        // Evitar conflictos de clases duplicadas entre los AARs del SDK Zebra
+        jniLibs {
+            pickFirsts += ['**/*.so']
+        }
     }
 }
- 
+
 dependencies {
-    // Zebra RFID SDK 2.0.5.238 - archivos locales
-    implementation fileTree(dir: 'libs', include: ['*.aar', '*.jar'])
- 
+    // ── Zebra RFID SDK 2.0.5.238 ─────────────────────────────────────────────
+    // IMPORTANTE: No usar fileTree (incluye todos los AARs y duplica el namespace
+    // com.zebra.rfid.api3 causando el error de Manifest merger).
+    // Solo incluir los AARs necesarios para RFD4030 via Bluetooth en Android 11.
+    implementation files('libs/API3_ASCII-release-2.0.5.238.aar')       // API principal
+    implementation files('libs/API3_INTERFACE-release-2.0.5.238.aar')   // Interfaces comunes
+    implementation files('libs/API3_CMN-release-2.0.5.238.aar')         // Clases comunes
+    implementation files('libs/API3_TRANSPORT-release-2.0.5.238.aar')   // Transporte BT/SPP
+    implementation files('libs/API3_READER-release-2.0.5.238.aar')      // Lector RFID
+    // NO incluir los siguientes (son para USB HID / NGE / LLRP — no aplica a RFD4030 BT):
+    //   API3_ZIOTC, API3_ZIOTCTRANSPORT, API3_NGE-Transport,
+    //   API3_NGE-protocol, API3_NGEUSB-Transport, API3_LLRP
+
+    // ── Kotlin ───────────────────────────────────────────────────────────────
     implementation 'org.jetbrains.kotlin:kotlin-stdlib:1.9.22'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+
+    // ── AndroidX ─────────────────────────────────────────────────────────────
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
@@ -59,16 +77,22 @@ dependencies {
     implementation 'androidx.activity:activity-ktx:1.8.2'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
-    implementation 'com.google.dagger:hilt-android:2.50'
-    kapt 'com.google.dagger:hilt-android-compiler:2.50'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
+
+    // ── Room ─────────────────────────────────────────────────────────────────
     implementation 'androidx.room:room-runtime:2.6.1'
     implementation 'androidx.room:room-ktx:2.6.1'
     kapt 'androidx.room:room-compiler:2.6.1'
+
+    // ── Hilt ─────────────────────────────────────────────────────────────────
+    implementation 'com.google.dagger:hilt-android:2.50'
+    kapt 'com.google.dagger:hilt-android-compiler:2.50'
+
+    // ── CSV ──────────────────────────────────────────────────────────────────
     implementation 'com.opencsv:opencsv:5.9'
- 
-    // SMB - Exportar a carpeta de red Windows
+
+    // ── SMB - Exportar a carpeta de red Windows ───────────────────────────────
     implementation 'eu.agno3.jcifs:jcifs-ng:2.1.9'
 }
- 
+
 kapt { correctErrorTypes true }

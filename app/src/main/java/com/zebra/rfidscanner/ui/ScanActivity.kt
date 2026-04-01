@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -44,12 +45,11 @@ class ScanActivity : AppCompatActivity() {
     private var pendingCsvContent: String = ""
     private var pendingCsvName: String = ""
  
-    // FIX PROBLEMA 2: Receptor para saber cuando la pantalla se enciende/apaga
-    // Cuando la pantalla se enciende, DataWedge necesita que la Activity tome foco
+    // Receptor para saber cuando la pantalla se enciende/apaga.
+    // Cuando la pantalla se enciende, DataWedge necesita que la Activity tome foco.
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_SCREEN_ON) {
-                // Re-registrar DataWedge cuando la pantalla vuelve
                 Handler(Looper.getMainLooper()).postDelayed({
                     binding.rvTags.requestFocus()
                     notifyDataWedge()
@@ -90,14 +90,13 @@ class ScanActivity : AppCompatActivity() {
         observeState()
         checkPermissionsAndInit()
  
-        // Registrar receptor de pantalla
         registerReceiver(screenReceiver, IntentFilter(Intent.ACTION_SCREEN_ON))
     }
  
     override fun onResume() {
         super.onResume()
-        // FIX PROBLEMA 2: Notificar a DataWedge cada vez que la Activity vuelve al frente
-        // Esto resuelve el retraso de 3-5 min al abrir la app
+        // Notificar a DataWedge cada vez que la Activity vuelve al frente.
+        // Resuelve el retraso de 3-5 min al abrir la app.
         Handler(Looper.getMainLooper()).postDelayed({
             notifyDataWedge()
         }, 500)
@@ -106,7 +105,6 @@ class ScanActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
-            // La Activity tiene foco — activar DataWedge
             notifyDataWedge()
             binding.rvTags.requestFocus()
         }
@@ -201,9 +199,8 @@ class ScanActivity : AppCompatActivity() {
         }
     }
  
-    // FIX REINICIO para Enterprise Home Screen (EHS)
-    // EHS no permite killProcess — en su lugar se usa recreate() para reiniciar la Activity
-    // y se reconecta el lector RFID limpiamente
+    // EHS no permite killProcess — se usa recreate() para reiniciar la Activity
+    // y reconectar el lector RFID limpiamente.
     private fun restartApp() {
         viewModel.release()
         Handler(Looper.getMainLooper()).postDelayed({
@@ -389,15 +386,27 @@ class ScanActivity : AppCompatActivity() {
         binding.tvSearchCount.text = if (query.isNotEmpty()) "${rows.size}" else ""
     }
  
+    // ── PERMISOS ─────────────────────────────────────────────────────────────
+    // FIX TC21 / Android 11:
+    // BLUETOOTH_SCAN y BLUETOOTH_CONNECT solo existen desde Android 12 (API 31).
+    // En Android 11 (TC21) estos permisos no existen y pedirlos en runtime
+    // hace que la app nunca inicialice el lector RFID.
+    // Solución: pedir solo los permisos que corresponden según la versión de API.
     private fun checkPermissionsAndInit() {
-        val needed = listOf(
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ).filter {
+        val needed = buildList {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Android 12+ (TC22 y superior)
+                add(Manifest.permission.BLUETOOTH_SCAN)
+                add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+            // Android 11 y anterior (TC21): solo necesita ubicación para BT classic/SPP
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
+ 
         if (needed.isEmpty()) viewModel.initialize()
         else permissionLauncher.launch(needed.toTypedArray())
     }
 }
+ 
